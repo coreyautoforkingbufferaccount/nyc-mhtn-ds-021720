@@ -1,4 +1,5 @@
 import functools
+import math
 import pandas as pd
 import seaborn as sns
 import numpy as np
@@ -223,7 +224,7 @@ class Multiplot(object):
         self._set_rows()
 
     @_multicol_plot_wrapper
-    def sb_multiplot(self, func, kwargs=None, default_axis=False):
+    def sb_multiplot(self, func, kwargs={}, default_axis=False):
         """Flexible way of calling iterating through plots of a passed
         Seaborn function. Default axis determines what axis the iterated
         variables will take on. Leave blank for one dimensional plots."""
@@ -233,6 +234,59 @@ class Multiplot(object):
             return func(data=self.df, ax=self.last_ax, **kwargs)
         else:
             return func(self.df[self.last_col], ax=self.last_ax, **kwargs)
+
+
+def plot_stacked_proportion(df, column, target, blend=0, style="darkgrid", palette="muted", x_dict=None):
+    """Creates a stacked bar chart normalized by proportion, and scaled
+    horizontally by the representation of the total data that is contained
+    by each parameter. The blend argument will allow you to attenuate this
+    effect and ranges from zero to one."""
+    sns.set_style(style)
+    sns.set_palette(palette)
+    fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(15, 10))
+
+    # Groups the dataframe where the index is the values of the independant column
+    # and the total counts of each dependant variable are the columns.
+    grouped = df.groupby([column, target])[column].count().unstack()
+
+    # Calculates the respective size for each group along with the total size of
+    # the sample.
+    totals = grouped.sum(axis=1)
+    n, n_col = totals.sum(), totals.size
+
+    # Creates ratios of the sample size for the groups within your independant variable
+    # and attenuates the differences based on the blend variable.
+    sample_ratios = totals / n
+    blended = blend / n_col + sample_ratios * (1 - blend)
+
+    # Notmalizes the counts of the target variable to proportions instad of raw counts.
+    proportions = grouped.divide(totals, axis=0)
+
+    plot = proportions.plot(kind='bar', stacked=True, ax=ax)
+
+    # Dynamically gets the sum total width of the bars based on the current plot.
+    bar_width, n_bars = plot.containers[0][0].get_width(), len(plot.containers[0])
+    agg_width = bar_width * n_bars
+    whitespace = n_col - agg_width
+    coord = 0
+
+    # Loops through the matplotlib objects modifying their horizontal scale based
+    # on the proportion of values in the sample and the blend parameter.
+    for i in np.arange(n_col):
+        for j in np.arange(len(plot.containers)):
+            if i == 0:
+                offset = -bar_width / 2
+            elif j == 0:
+                offset += new_width
+            bar = plot.containers[j][i]
+            new_width = agg_width * blended[i]
+            gap = whitespace / n_col * i
+            bar.set_width(new_width)
+            bar.set_x(gap + offset)
+    if x_dict:
+        x_ticks = [x_dict.get(idx, idx) for idx in proportions.index]
+        plot.set_xticklabels(x_ticks)
+    plt.show()
 
 
 #Changes long numeric values and replaces them with more human readable abbreviations.
@@ -262,16 +316,16 @@ def unlog_plot(values, base):
 
 #Shows the full breadth of possilbe values and nans for a column of a dataframe.
 def full_value_counts(df, column):
-    unique = df[column].unique().size
+    unique, total = df[column].unique().size, df[column].size
     totalna = df[column].isna().sum()
-    percent_na = totalna/df[column].size
+    percent_na = totalna/total
     print(f"There are {unique} unique values with {totalna} nan values making up {percent_na*100:.1f}%")
     for value, count in df[column].value_counts().iteritems():
-        print(f"{count}-{value}")
+        print(f"{count}-{value} --{count/total*100:.2f}%")
 
 # Modifications to masked heatmap parameters from lecture notes.
-def trimmed_heatmap(df, columns, font_scale=1, annot=True):
-    plt.figure(figsize=(15, 10))
+def trimmed_heatmap(df, columns, font_scale=1, annot=True, figsize=(15,10)):
+    plt.figure(figsize=figsize)
     corr = df[columns].corr()
     sns.set(style="white")
 

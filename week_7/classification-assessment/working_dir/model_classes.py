@@ -24,20 +24,19 @@ class ModelSwitcher(object):
 #An object that manages the workflow for dummy variables, transforming features, polynomial features, class balancing,
 # and scaling data.
 class DataPreprocessor(object):
-    def __init__(self, df, target, cat_features={}, cont_features={}, create_dummies=False,
-                 transformed_interactions=False, dummy_interactions=False, scale_dummies=False):
+    def __init__(self, df, target, cat_features={}, cont_features={}, poly_features={}, create_dummies=False,
+                 scale_dummies=False):
         self.df = df
         self.create_dummies = create_dummies
-        self.transformed_interactions = transformed_interactions
-        self.dummy_interactions = dummy_interactions
         self.scale_dummies = scale_dummies
-        self._set_features(target, cat_features, cont_features)
+        self._set_features(target, cat_features, cont_features, poly_features)
         self.X = pd.concat([df[self.cols.drop(labels=self.cols_generated_dummies)], self.dummies], axis=1)
         self.y = df[target]
 
     #Creates various attributes storing column names from specifically structured dictionaries for the
     # categorical and continuous variables.
-    def _set_features(self, target, cat_features, cont_features):
+    def _set_features(self, target, cat_features, cont_features, poly_features):
+        self._parse_poly_dict(poly_features)
         self._get_cat_features(cat_features)
         self._get_cont_features(cont_features)
         self.cols_initial = self.cols_continuous.union(self.cols_categorical, sort=False)
@@ -111,6 +110,24 @@ class DataPreprocessor(object):
             self.df[column] = self.df[column].astype('category')
             self.dummies = pd.concat([self.dummies, pd.get_dummies(self.df[column], prefix=column, drop_first=True)], axis=1)
         self.cols_generated_dummies = self.dummies.columns
+
+    def _parse_poly_dict(self, poly_dict):
+
+        self.transformed_interactions = True
+        self.dummy_interactions = True
+        method = poly_dict.get("method")
+
+        if method == "choose":
+            pass
+        elif method == "eliminate":
+            pass
+        elif method == "continuous":
+            self.transformed_interactions = False
+            self.dummy_interactions = False
+        elif method == "no_dummies":
+            self.dummy_interactions = False
+        elif method == "no_transformed":
+            self.transformed_interactions = False
 
     #Performs a train_test split.
     def _train_test_split(self):
@@ -269,6 +286,7 @@ class DataPreprocessor(object):
 
 #Prints the models, accuracy/f1 score.
 def evaluate_model(model, X_test, y_test):
+    """Tests a model for accuracy, f1 score, precision, and recall"""
     y_pred = model.predict(X_test)
     if y_test.unique().size > 2:
         f1 = f1_score(y_test, y_pred, average='micro')

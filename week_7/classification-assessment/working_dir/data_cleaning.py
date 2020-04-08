@@ -46,8 +46,8 @@ def replace_unknowns(df):
     return df
 
 
-# Gathers column names to exclude
 def exclude_columns(looped_cols):
+    """Gathers column names to exclude"""
     looped_exc = []
     for col in looped_cols:
         sing_exc = [col + f"{i}" for i in np.arange(1, 7)]
@@ -71,10 +71,3 @@ def calculate_utilization(df):
     df["debt_avg_delta"] = (df["raw_debt_accum"] / df["debt_streak"]).fillna(0)
     df = remove_placeholders(df)
     return df
-
-def evaluate_model(model, X_test, y_test):
-    y_pred = model.predict(X_test)
-    f1 = f1_score(y_test, y_pred)
-    accuracy = accuracy_score(y_test, y_pred)
-    print("F1 Score:", f1)
-    print("Accuracy:", accuracy)
