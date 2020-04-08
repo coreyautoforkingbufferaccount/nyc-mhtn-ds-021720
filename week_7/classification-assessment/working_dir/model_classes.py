@@ -97,6 +97,7 @@ class DataPreprocessor(object):
             else:
                 new_col_name = f"{column}_ln"
             self.df[new_col_name] = self.df[column].map(lambda x: math.log(x, base) if base else math.log(x))
+            self._manage_poly_renames(column, pd.Index([new_col_name]))
             self.cols_logged = self.cols_logged.append(pd.Index([new_col_name]))
 
     # Generates dummy variables from a list of categorical columns.
@@ -108,26 +109,21 @@ class DataPreprocessor(object):
             if unique > 20:
                 print(f"Warning: {column} has {unique} unique values")
             self.df[column] = self.df[column].astype('category')
-            self.dummies = pd.concat([self.dummies, pd.get_dummies(self.df[column], prefix=column, drop_first=True)], axis=1)
+            new_dummies = pd.get_dummies(self.df[column], prefix=column, drop_first=True)
+            self._manage_poly_renames(column, new_dummies.columns)
+            self.dummies = pd.concat([self.dummies, new_dummies], axis=1)
         self.cols_generated_dummies = self.dummies.columns
+
+    def _manage_poly_renames(self, original, replacements):
+
+        if original in self.polynomial["columns"]:
+            self.polynomial["columns"] = self.polynomial["columns"].drop(labels=[original])
+            self.polynomial["columns"] = self.polynomial["columns"].union(replacements, sort=False)
 
     def _parse_poly_dict(self, poly_dict):
 
-        self.transformed_interactions = True
-        self.dummy_interactions = True
-        method = poly_dict.get("method")
-
-        if method == "choose":
-            pass
-        elif method == "eliminate":
-            pass
-        elif method == "continuous":
-            self.transformed_interactions = False
-            self.dummy_interactions = False
-        elif method == "no_dummies":
-            self.dummy_interactions = False
-        elif method == "no_transformed":
-            self.transformed_interactions = False
+        self.polynomial = {"method":poly_dict.get("method", "all")}
+        self.polynomial["columns"] = pd.Index(poly_dict.get("columns", []))
 
     #Performs a train_test split.
     def _train_test_split(self):
@@ -250,14 +246,24 @@ class DataPreprocessor(object):
     #Creates a column list for polynomial features including or excluding dummy variables and transformed features depending
     # on arguments.
     def _choose_poly_columns(self):
-        if self.transformed_interactions and self.cols_transformed.size > 0:
-            columns = self.cols_continuous
+
+        baseline = self.cols_initial.drop(labels=self.cols_nominal)
+        sel = self.polynomial["columns"]
+        method = self.polynomial["method"]
+        if method == "choose":
+            mask = baseline.isin(sel)
+        elif method == "eliminate":
+            mask = baseline.isin(sel) == False
+        elif method == "linear":
+            mask = baseline.isin(self.cols_linear)
+        elif method == "no_dummies":
+            mask = baseline.isin(self.cols_continuous)
+        elif method == "no_transformed":
+            mask = baseline.isin(self.cols_linear.union(self.cols_dummies, sort=False))
         else:
-            columns = self.cols_linear
-        if self.dummy_interactions:
-            return columns.union(self.cols_dummies, sort=False)
-        else:
-            return columns
+            mask = np.full(baseline.size, True)
+        columns = baseline[mask]
+        return columns
 
     #Determines whether or not dummy variables will be scaled based on an initialization argument.
     def _choose_scaled_columns(self):
