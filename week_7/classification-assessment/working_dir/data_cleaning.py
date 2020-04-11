@@ -45,15 +45,22 @@ def replace_unknowns(df):
     df["MARRIAGE"].replace(marriage_dict, inplace=True)
     return df
 
-
-def exclude_columns(looped_cols):
+def exclude_columns(looped_cols, start, end):
     """Gathers column names to exclude"""
     looped_exc = []
     for col in looped_cols:
-        sing_exc = [col + f"{i}" for i in np.arange(1, 7)]
+        sing_exc = [col + f"{i}" for i in np.arange(start, end)]
         looped_exc.extend(sing_exc)
-    looped_exc.extend(["ID", "default payment next month"])
     return looped_exc
+
+
+def extract_dummies(df, column, value):
+    """Creates a column with dummy variables for matches in a value"""
+
+    if np.isnan(value):
+        return np.where(df[column].isna().values == True, 1, 0)
+    else:
+        return np.where(df[column].values == value, 1, 0)
 
 
 def calculate_utilization(df):
@@ -70,4 +77,37 @@ def calculate_utilization(df):
     df["avg_payment_impact"] = df["avg_payment_impact"] / 6
     df["debt_avg_delta"] = (df["raw_debt_accum"] / df["debt_streak"]).fillna(0)
     df = remove_placeholders(df)
+    return df
+
+
+def split_pay_columns(df):
+    """Extracts the quantitative information (The number of months of missed payments)
+    from the qualitative, the two fields that determined ontime payments"""
+
+    df = df.copy()
+    for i in np.arange(0, 1):
+        column = "PAY_" + f"{i}"
+        df[column] = df[column].astype(int)
+        dflt = df[column].unique().tolist()
+        default_vals = dict(zip(dflt, dflt))
+        default_vals[-1], default_vals[-2] = 0, 0
+        df[f"{column}N1"] = extract_dummies(df, column, -1)
+        df[f"{column}N2"] = extract_dummies(df, column, -1)
+        df[column] = df[column].map(default_vals)
+    return df
+
+def combine_pay_columns(df):
+    """Extracts non correlated information from the past history pay columns. Any
+    time there is an improvement to this field it is incremented and the sum is added
+    to a new column in the dataframe."""
+
+    df = df.copy()
+    before= df["PAY_0"].values
+    results = np.zeros(before.size)
+    for i in np.arange(2, 7):
+        column = "PAY_" + f"{i}"
+        after = df[column].values
+        comparison = before < after
+        results += comparison.astype(int)
+    df["payment_improvements"] = results
     return df
