@@ -22,7 +22,7 @@ def plot_knn_f1s(X_train, X_test, y_train, y_test):
     plt.figure(figsize=(12, 6))
     plt.plot(k_range, f_scores, color='red', linestyle='dashed', marker='o',
              markerfacecolor='blue', markersize=10)
-    plt.title('Accuracy score by K Value')
+    plt.title('F1 score by K Value')
     plt.xlabel('K Value')
     plt.ylabel('Accuracy Score')
     plt.show()
