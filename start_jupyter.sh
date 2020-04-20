@@ -1,5 +1,5 @@
 #! /bin/bash
 
-source activate learn-env
+conda activate chpy37
 jt -t chesterish
 jupyter notebook
